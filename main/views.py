@@ -3,6 +3,11 @@ from .forms import UploadFileForm
 from .models import UploadedFile
 import pandas as pd
 import os
+import traceback
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def upload_file(request):
     if request.method == 'POST':
@@ -10,27 +15,27 @@ def upload_file(request):
         if form.is_valid():
             file = request.FILES['file']
             file_name = file.name
-
-            # Save uploaded file temporarily
             temp_path = f"/tmp/{file_name}"
-            with open(temp_path, 'wb+') as destination:
-                for chunk in file.chunks():
-                    destination.write(chunk)
 
-            # Read file using pandas
             try:
+                with open(temp_path, 'wb+') as destination:
+                    for chunk in file.chunks():
+                        destination.write(chunk)
+
+                import pandas as pd
                 df = pd.read_excel(temp_path)
-                data = df.head(10).to_dict(orient='records')  # Preview first 10 rows
+                data = df.head(10).to_dict(orient='records')
+
+                # ✅ This is where it may crash (DB save)
+                from .models import UploadedFile
+                UploadedFile.objects.create(file_name=file_name, file_data=data)
+
+                os.remove(temp_path)
+                return render(request, 'main/upload_success.html', {'file_name': file_name})
+
             except Exception as e:
-                data = {"error": str(e)}
-
-            # Save info to DB
-            UploadedFile.objects.create(file_name=file_name, file_data=data)
-
-            os.remove(temp_path)
-            return render(request, 'main/upload_success.html', {'file_name': file_name})
-
-    else:
-        form = UploadFileForm()
-
-    return render(request, 'main/upload.html', {'form': form})
+                logger.error("Upload failed", exc_info=True)
+                return render(request, 'main/upload.html', {
+                    'form': form,
+                    'error': str(e)
+                })
