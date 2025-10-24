@@ -16,11 +16,16 @@ Including another URLconf
 """
 from django.http import HttpResponse
 from django.urls import path
+from main import views
+from django.contrib import admin
 
 def home(request):
     return HttpResponse("Hello from Django on Render!")
 
 urlpatterns = [
     path('', home),
+    path('admin/', admin.site.urls),
+    path('upload/', views.upload_file, name='upload'),
+
 ]
 
